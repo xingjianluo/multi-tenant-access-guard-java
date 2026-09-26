@@ -18,7 +18,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-import java.util.function.Predicate;
 
 /**
  * Role- and ownership-based authorization with explainable decisions.
@@ -131,14 +130,12 @@ public class DefaultAuthorizationService implements AuthorizationService {
 
     private void audit(Subject subject, String tenantId, String resourceId,
                        Action action, Decision decision) {
-        Predicate<DenyReason> crossOrMissing =
-                r -> r == DenyReason.RESOURCE_NOT_FOUND || r == DenyReason.CROSS_TENANT_ACCESS;
-        String auditTenant = (decision.reason() != null && crossOrMissing.test(decision.reason()))
-                ? tenantId : subject.tenantId();
+        // Audit always keys on the *subject's* tenant; the requested tenant and the
+        // resource tenant are already captured in the basis text.
         auditService.record(new AuditEvent(
                 timeSource.nowMillis(),
                 "AUTHZ",
-                auditTenant,
+                subject.tenantId(),
                 subject.subjectId(),
                 subject.loginEntry() == null ? null : subject.loginEntry().name(),
                 resourceId,

@@ -98,21 +98,21 @@ public class AccessController {
     }
 
     @PostMapping("/read")
-    public AccessResponse read(@RequestHeader("Authorization") String authorizationHeader,
+    public AccessResponse read(@RequestHeader(value = "Authorization", required = false) String authorizationHeader,
                                @PathVariable String tenantId,
                                @PathVariable String resourceId) {
         return doAccess(authorizationHeader, tenantId, resourceId, Action.READ, false);
     }
 
     @PostMapping("/write")
-    public AccessResponse write(@RequestHeader("Authorization") String authorizationHeader,
+    public AccessResponse write(@RequestHeader(value = "Authorization", required = false) String authorizationHeader,
                                 @PathVariable String tenantId,
                                 @PathVariable String resourceId) {
         return doAccess(authorizationHeader, tenantId, resourceId, Action.WRITE, false);
     }
 
     @PostMapping("/delete")
-    public AccessResponse delete(@RequestHeader("Authorization") String authorizationHeader,
+    public AccessResponse delete(@RequestHeader(value = "Authorization", required = false) String authorizationHeader,
                                  @PathVariable String tenantId,
                                  @PathVariable String resourceId,
                                  @RequestParam(name = "simulateFailure", defaultValue = "false")

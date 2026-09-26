@@ -17,10 +17,10 @@ public record RefreshVerdict(Status status, RefreshRecord record, DenyReason den
     }
 
     public static RefreshVerdict ok(RefreshRecord record) {
-        return null;
+        return new RefreshVerdict(Status.OK, record, null);
     }
 
     public static RefreshVerdict reject(Status status, DenyReason reason) {
-        return null;
+        return new RefreshVerdict(status, null, reason);
     }
 }

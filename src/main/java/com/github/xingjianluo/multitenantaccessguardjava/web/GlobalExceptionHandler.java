@@ -9,6 +9,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
@@ -46,6 +47,18 @@ public class GlobalExceptionHandler {
                 "traceId", traceId,
                 "reason", ex.getReason().name(),
                 "message", safeMessage(ex.getReason())));
+    }
+
+    @ExceptionHandler({HttpMessageNotReadableException.class, IllegalArgumentException.class})
+    public ResponseEntity<Map<String, Object>> handleBadRequest(Exception ex) {
+        String traceId = newTraceId();
+        auditService.record(new AuditEvent(timeSource.nowMillis(), "BAD_REQUEST",
+                null, null, null, null, null, false,
+                "BAD_REQUEST", ex.getClass().getSimpleName(), null, traceId));
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of(
+                "traceId", traceId,
+                "reason", "BAD_REQUEST",
+                "message", "request body is malformed or invalid"));
     }
 
     @ExceptionHandler(Exception.class)
