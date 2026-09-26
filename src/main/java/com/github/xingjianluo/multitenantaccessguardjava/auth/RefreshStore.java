@@ -15,7 +15,7 @@ public interface RefreshStore {
      * live token of the family. Returns the verdict distinguishing first-use from
      * replay / revoked-family / unknown.
      */
-    RefreshVerdict consume(String tokenId, String nextTokenId, long nowMillis);
+    RefreshVerdict consume(String tokenId, String nextTokenId, long nextExpiresAt, long nowMillis);
 
     /** Look up the current live record of a family (for post-revocation inspection). */
     RefreshRecord findByFamily(String familyId);

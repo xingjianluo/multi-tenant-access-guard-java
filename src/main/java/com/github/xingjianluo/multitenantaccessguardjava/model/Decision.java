@@ -14,10 +14,10 @@ public record Decision(boolean allowed,
                        long snapshotVersion) {
 
     public static Decision allow(String basis, long snapshotVersion) {
-        return null;
+        return new Decision(true, null, basis, snapshotVersion);
     }
 
     public static Decision deny(DenyReason reason, String basis, long snapshotVersion) {
-        return null;
+        return new Decision(false, reason, basis, snapshotVersion);
     }
 }

@@ -1,11 +1,13 @@
 package com.github.xingjianluo.multitenantaccessguardjava.config;
 
+import com.github.xingjianluo.multitenantaccessguardjava.ratelimit.FixedWindowRateLimitService;
 import com.github.xingjianluo.multitenantaccessguardjava.ratelimit.RateLimitPolicy;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-/** Wires named rate-limit policies. */
+/** Wires the named rate-limit policies and registers their key families. */
 @Configuration
 public class GuardConfig {
 
@@ -21,5 +23,25 @@ public class GuardConfig {
                                            @Value("${guard.sensitive.window-millis:60000}") long windowMillis,
                                            @Value("${guard.sensitive.lock-millis:120000}") long lockMillis) {
         return new RateLimitPolicy(maxFailures, windowMillis, lockMillis);
+    }
+
+    /**
+     * Key families: {@code login:...} failures use the login policy;
+     * {@code sensitive:...} failures use the sensitive-action policy.
+     */
+    @Bean
+    RateLimitFamilyRegistrar rateLimitFamilies(FixedWindowRateLimitService service,
+                                               @Qualifier("loginPolicy") RateLimitPolicy login,
+                                               @Qualifier("sensitivePolicy") RateLimitPolicy sensitive) {
+        return new RateLimitFamilyRegistrar(service, login, sensitive);
+    }
+
+    /** Small registrar component kept out of the service's public API. */
+    public static class RateLimitFamilyRegistrar {
+        RateLimitFamilyRegistrar(FixedWindowRateLimitService service,
+                                 RateLimitPolicy login, RateLimitPolicy sensitive) {
+            service.registerPolicy("login", login);
+            service.registerPolicy("sensitive", sensitive);
+        }
     }
 }
