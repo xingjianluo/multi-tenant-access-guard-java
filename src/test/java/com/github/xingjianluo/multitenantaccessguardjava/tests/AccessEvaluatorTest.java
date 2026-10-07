@@ -58,10 +58,14 @@ class AccessEvaluatorTest {
 
     @Test
     void crossTenantIsDenied() {
+        // 防探测语义：跨租户访问他人资源时，在本租户命名空间查无此编号，
+        // 对调用方统一返回 RESOURCE_NOT_FOUND，无法判断对方是否真有该资源；
+        // 审计 basis 内部保留 CROSS_TENANT 溯源标记。
         AccessDecision d = evaluator.evaluate(ctx("u-bob", "tenant-b", Role.USER), "doc-1", Action.READ);
         print(d, "u-bob", "tenant-b", "doc-1", Action.READ);
         assertFalse(d.allowed());
-        assertEquals(DenyReason.CROSS_TENANT, d.denyReason());
+        assertEquals(DenyReason.RESOURCE_NOT_FOUND, d.denyReason());
+        assertTrue(d.detail().contains("CROSS_TENANT"), "审计依据应保留跨租户标记");
     }
 
     @Test
@@ -119,7 +123,8 @@ class AccessEvaluatorTest {
         assertEquals("tenant-b", event.tenant());
         assertEquals("doc-1", event.resource());
         assertEquals(Action.READ, event.action());
-        assertEquals(DenyReason.CROSS_TENANT, event.denyReason());
+        assertEquals(DenyReason.RESOURCE_NOT_FOUND, event.denyReason());
         assertTrue(event.basis().contains("policyVersion="));
+        assertTrue(event.basis().contains("CROSS_TENANT"), "跨租户探测在审计依据中可溯源");
     }
 }

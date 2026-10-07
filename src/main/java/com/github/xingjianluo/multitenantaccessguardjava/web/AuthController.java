@@ -2,9 +2,10 @@ package com.github.xingjianluo.multitenantaccessguardjava.web;
 
 import com.github.xingjianluo.multitenantaccessguardjava.audit.AuditEvent;
 import com.github.xingjianluo.multitenantaccessguardjava.audit.AuditLog;
-import com.github.xingjianluo.multitenantaccessguardjava.auth.AuthToken;
+import com.github.xingjianluo.multitenantaccessguardjava.auth.RenewalResult;
 import com.github.xingjianluo.multitenantaccessguardjava.auth.CredentialException;
 import com.github.xingjianluo.multitenantaccessguardjava.auth.SessionService;
+import com.github.xingjianluo.multitenantaccessguardjava.auth.TokenPair;
 import com.github.xingjianluo.multitenantaccessguardjava.auth.TokenService;
 import com.github.xingjianluo.multitenantaccessguardjava.auth.UserDirectory;
 import com.github.xingjianluo.multitenantaccessguardjava.domain.DenyReason;
@@ -63,13 +64,18 @@ public class AuthController {
     @PostMapping("/refresh")
     public ResponseEntity<Map<String, Object>> refresh(@RequestBody RefreshRequest request) {
         try {
-            AuthToken token = tokenService.refresh(request.token());
+            RenewalResult renewed = tokenService.renew(request.token());
             Map<String, Object> body = new LinkedHashMap<>();
-            body.put("token", token.serialized());
-            body.put("expiresAt", token.expiresAt().toString());
+            body.put("token", renewed.accessToken().serialized());
+            body.put("expiresAt", renewed.accessToken().expiresAt().toString());
+            body.put("refreshToken", renewed.refreshToken().serialized());
+            body.put("refreshExpiresAt", renewed.refreshToken().expiresAt().toString());
             return ResponseEntity.ok(body);
         } catch (CredentialException e) {
-            return error(HttpStatus.UNAUTHORIZED, e.reason());
+            // 非续期凭据（access）用途不合法 → 403；其余凭据问题仍为 401。
+            HttpStatus status = e.reason() == DenyReason.CREDENTIAL_NOT_REFRESHABLE
+                    ? HttpStatus.FORBIDDEN : HttpStatus.UNAUTHORIZED;
+            return error(status, e.reason());
         }
     }
 
@@ -98,9 +104,11 @@ public class AuthController {
         body.put("userId", s.userId());
         body.put("tenantId", s.tenantId());
         if (tokenEntry) {
-            AuthToken token = tokenService.issue(s.userId(), s.tenantId());
-            body.put("token", token.serialized());
-            body.put("expiresAt", token.expiresAt().toString());
+            TokenPair pair = tokenService.issuePair(s.userId(), s.tenantId());
+            body.put("token", pair.accessToken().serialized());
+            body.put("expiresAt", pair.accessToken().expiresAt().toString());
+            body.put("refreshToken", pair.refreshToken().serialized());
+            body.put("refreshExpiresAt", pair.refreshToken().expiresAt().toString());
         } else {
             body.put("sessionId", sessionService.createSession(s.userId(), s.tenantId()));
         }

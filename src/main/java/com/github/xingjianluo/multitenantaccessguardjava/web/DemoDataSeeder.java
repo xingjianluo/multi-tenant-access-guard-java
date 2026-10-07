@@ -30,10 +30,16 @@ public class DemoDataSeeder {
                 new Subject("u-carol", "tenant-a", Set.of(Role.ADMIN)));
         userDirectory.register("dave", "dave-pw",
                 new Subject("u-dave", "tenant-a", Set.of(Role.VIEWER)));
+        // 专供敏感操作锁定端到端验证的 VIEWER，避免与登录锁定测试共享计数
+        userDirectory.register("erin", "erin-pw",
+                new Subject("u-erin", "tenant-a", Set.of(Role.VIEWER)));
         userDirectory.register("bob", "bob-pw",
                 new Subject("u-bob", "tenant-b", Set.of(Role.USER)));
 
         policyStore.registerResource(new GuardedResource("doc-1", "tenant-a", "u-alice"));
         policyStore.registerResource(new GuardedResource("doc-2", "tenant-b", "u-bob"));
+        // 同名资源在两个租户下各自独立存在、各自管理归属
+        policyStore.registerResource(new GuardedResource("shared-doc", "tenant-a", "u-alice"));
+        policyStore.registerResource(new GuardedResource("shared-doc", "tenant-b", "u-bob"));
     }
 }

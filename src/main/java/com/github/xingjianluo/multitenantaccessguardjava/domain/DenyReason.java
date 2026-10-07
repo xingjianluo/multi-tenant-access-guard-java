@@ -20,6 +20,12 @@ public enum DenyReason {
     NOT_OWNER,
     /** 触发限流。 */
     RATE_LIMITED,
-    /** 账号被临时锁定。 */
-    LOCKED
+    /** 账号因连续登录失败被临时锁定。 */
+    LOCKED,
+    /** 敏感操作因连续失败被临时锁定（区别于限流与登录锁定）。 */
+    SENSITIVE_LOCKED,
+    /** 普通访问凭据不具备续期用途，不能用于续期。 */
+    CREDENTIAL_NOT_REFRESHABLE,
+    /** 凭据用途与入口不匹配（如续期凭据被当成访问凭据提交到业务入口）。 */
+    CREDENTIAL_TYPE_MISMATCH
 }

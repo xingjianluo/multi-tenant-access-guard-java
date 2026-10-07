@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS} %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- 业务用例覆盖日志：每个用例打印 business=<场景> result=PASS -->
+    <logger name="com.github.xingjianluo.multitenantaccessguardjava.tests" level="INFO"/>
+    <!-- 审计日志，体现判定链路与拒绝原因 -->
+    <logger name="com.github.xingjianluo.multitenantaccessguardjava.audit" level="INFO"/>
+
+    <root level="WARN">
+        <appender-ref ref="STDOUT"/>
+    </root>
+</configuration>

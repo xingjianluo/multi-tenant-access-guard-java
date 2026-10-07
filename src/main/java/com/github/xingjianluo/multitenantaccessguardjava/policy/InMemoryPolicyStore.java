@@ -3,10 +3,12 @@ package com.github.xingjianluo.multitenantaccessguardjava.policy;
 import com.github.xingjianluo.multitenantaccessguardjava.domain.Action;
 import com.github.xingjianluo.multitenantaccessguardjava.domain.GuardedResource;
 import com.github.xingjianluo.multitenantaccessguardjava.domain.Role;
+import com.github.xingjianluo.multitenantaccessguardjava.policy.PolicySnapshot.ResourceKey;
 import org.springframework.stereotype.Component;
 
 import java.util.EnumSet;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
@@ -17,6 +19,9 @@ import java.util.concurrent.atomic.AtomicReference;
  * - 进行中的请求复用其开始时取得的快照，判定结果在请求内一致；
  * - 变更对新请求立即整体生效，不会出现旧权限长期残留；
  * - 撤销与授予都以整体快照发布，不存在权限被短暂放大的中间态。
+ *
+ * 资源按（租户, 资源编号）复合键存放：不同租户注册同名资源互不覆盖，
+ * 批量注册在同一次快照替换中整体生效，不会出现后写顶掉前面租户记录的中间态。
  */
 @Component
 public class InMemoryPolicyStore implements PolicyStore {
@@ -75,19 +80,37 @@ public class InMemoryPolicyStore implements PolicyStore {
     @Override
     public void registerResource(GuardedResource resource) {
         current.updateAndGet(snapshot -> {
-            Map<String, GuardedResource> resources = new HashMap<>(snapshot.resources());
-            resources.put(resource.resourceId(), resource);
+            Map<ResourceKey, GuardedResource> resources = new HashMap<>(snapshot.resources());
+            resources.put(keyOf(resource), resource);
             return new PolicySnapshot(snapshot.version() + 1, snapshot.rolePermissions(), resources);
         });
     }
 
     @Override
-    public void removeResource(String resourceId) {
+    public void registerResources(List<GuardedResource> resourcesToAdd) {
+        if (resourcesToAdd.isEmpty()) {
+            return;
+        }
         current.updateAndGet(snapshot -> {
-            Map<String, GuardedResource> resources = new HashMap<>(snapshot.resources());
-            resources.remove(resourceId);
+            Map<ResourceKey, GuardedResource> resources = new HashMap<>(snapshot.resources());
+            for (GuardedResource resource : resourcesToAdd) {
+                resources.put(keyOf(resource), resource);
+            }
             return new PolicySnapshot(snapshot.version() + 1, snapshot.rolePermissions(), resources);
         });
+    }
+
+    @Override
+    public void removeResource(String tenantId, String resourceId) {
+        current.updateAndGet(snapshot -> {
+            Map<ResourceKey, GuardedResource> resources = new HashMap<>(snapshot.resources());
+            resources.remove(new ResourceKey(tenantId, resourceId));
+            return new PolicySnapshot(snapshot.version() + 1, snapshot.rolePermissions(), resources);
+        });
+    }
+
+    private static ResourceKey keyOf(GuardedResource resource) {
+        return new ResourceKey(resource.tenantId(), resource.resourceId());
     }
 
     private static Map<Role, Set<Action>> copyPermissions(PolicySnapshot snapshot) {

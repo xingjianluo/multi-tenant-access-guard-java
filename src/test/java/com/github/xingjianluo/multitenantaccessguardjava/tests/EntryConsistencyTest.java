@@ -47,7 +47,7 @@ class EntryConsistencyTest {
 
     @Test
     void sameSubjectSameDecisionAcrossEntries() {
-        AuthToken token = tokens.issue("u-alice", "tenant-a");
+        AuthToken token = tokens.issuePair("u-alice", "tenant-a").accessToken();
         String sessionId = sessions.createSession("u-alice", "tenant-a");
         AuthContext viaToken = tokens.authenticate(token.serialized());
         AuthContext viaSession = sessions.authenticate(sessionId);

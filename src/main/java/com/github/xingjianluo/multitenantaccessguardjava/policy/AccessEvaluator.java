@@ -15,7 +15,12 @@ import java.time.Instant;
 /**
  * 基于角色与资源归属的统一判定器，两种登录入口共用，保证结论一致。
  * 判定顺序固定，拒绝原因可区分：
- * 资源不存在 → 跨租户 → 角色权限不足 → 非归属者。
+ * 资源在本租户命名空间不存在 → 角色权限不足 → 非归属者。
+ *
+ * 租户隔离语义：资源查找以（主体租户, 资源编号）为键，主体只能看到本租户命名空间。
+ * 跨租户访问他人同名资源时，本租户查不到该编号，统一返回 RESOURCE_NOT_FOUND——
+ * 调用方无法据响应判断其他租户到底有没有这个资源（防探测）。
+ * 若该编号在别的租户确实存在，审计 basis 中保留 CROSS_TENANT 标记供内部溯源。
  * 单次判定复用同一快照，结果可解释并写入审计。
  */
 @Component
@@ -48,15 +53,20 @@ public class AccessEvaluator {
 
     private AccessDecision doEvaluate(PolicySnapshot snapshot, AuthContext context,
                                       String resourceId, Action action) {
-        GuardedResource resource = snapshot.findResource(resourceId).orElse(null);
+        String subjectTenant = context.subject().tenantId();
+        // 只在主体自己的租户命名空间内查找：跨租户同名资源对本主体不可见。
+        GuardedResource resource = snapshot.findResource(subjectTenant, resourceId).orElse(null);
         if (resource == null) {
-            return AccessDecision.deny(DenyReason.RESOURCE_NOT_FOUND,
-                    "resource " + resourceId + " not found");
-        }
-        if (!resource.tenantId().equals(context.subject().tenantId())) {
-            return AccessDecision.deny(DenyReason.CROSS_TENANT,
-                    "resource belongs to tenant " + resource.tenantId()
-                            + ", subject tenant is " + context.subject().tenantId());
+            // 内部审计确认是否为跨租户探测：其他租户有同编号资源时标记 CROSS_TENANT，
+            // 但对调用方一律返回 RESOURCE_NOT_FOUND，不泄露存在性。
+            boolean existsElsewhere = snapshot.resources().values().stream()
+                    .anyMatch(r -> r.resourceId().equals(resourceId)
+                            && !r.tenantId().equals(subjectTenant));
+            String basis = existsElsewhere
+                    ? "resource " + resourceId + " exists in another tenant (CROSS_TENANT), "
+                            + "not visible to tenant " + subjectTenant
+                    : "resource " + resourceId + " not found in tenant " + subjectTenant;
+            return AccessDecision.deny(DenyReason.RESOURCE_NOT_FOUND, basis);
         }
         boolean roleAllowed = context.subject().roles().stream()
                 .anyMatch(role -> snapshot.roleAllows(role, action));
