@@ -37,7 +37,7 @@ class EntryConsistencyTest {
         MutableClock clock = new MutableClock(Instant.parse("2026-09-26T00:00:00Z"));
         UserDirectory directory = new UserDirectory();
         directory.register("alice", "pw", new Subject("u-alice", "tenant-a", Set.of(Role.USER)));
-        tokens = new TokenService(directory, clock, 600, "test-secret");
+        tokens = new TokenService(directory, clock, 600, 3600, "test-secret");
         sessions = new SessionService(directory, clock, 600);
         InMemoryPolicyStore store = new InMemoryPolicyStore();
         store.registerResource(new GuardedResource("doc-1", "tenant-a", "u-alice"));

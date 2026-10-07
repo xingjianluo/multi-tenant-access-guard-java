@@ -66,12 +66,13 @@ class WebIntegrationTest {
     }
 
     @Test
-    void crossTenantDeniedWithDistinctReason() throws Exception {
+    void crossTenantDeniedWithoutExistenceLeak() throws Exception {
         String bobToken = loginToken("bob", "bob-pw");
+        // 跨租户访问他租户资源：与资源不存在返回完全一致的 404，不泄露存在性
         MvcResult result = mvc.perform(get("/api/resources/doc-1")
                         .header("Authorization", "Bearer " + bobToken))
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.reason").value("CROSS_TENANT"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.reason").value("RESOURCE_NOT_FOUND"))
                 .andReturn();
         log.info("TEST-WEB subject=u-bob tenant=tenant-b resource=doc-1 action=READ response={}",
                 result.getResponse().getContentAsString());

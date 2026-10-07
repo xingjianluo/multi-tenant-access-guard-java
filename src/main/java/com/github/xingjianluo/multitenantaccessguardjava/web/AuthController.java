@@ -2,7 +2,6 @@ package com.github.xingjianluo.multitenantaccessguardjava.web;
 
 import com.github.xingjianluo.multitenantaccessguardjava.audit.AuditEvent;
 import com.github.xingjianluo.multitenantaccessguardjava.audit.AuditLog;
-import com.github.xingjianluo.multitenantaccessguardjava.auth.AuthToken;
 import com.github.xingjianluo.multitenantaccessguardjava.auth.CredentialException;
 import com.github.xingjianluo.multitenantaccessguardjava.auth.SessionService;
 import com.github.xingjianluo.multitenantaccessguardjava.auth.TokenService;
@@ -63,10 +62,11 @@ public class AuthController {
     @PostMapping("/refresh")
     public ResponseEntity<Map<String, Object>> refresh(@RequestBody RefreshRequest request) {
         try {
-            AuthToken token = tokenService.refresh(request.token());
+            TokenService.TokenPair pair = tokenService.refresh(request.token());
             Map<String, Object> body = new LinkedHashMap<>();
-            body.put("token", token.serialized());
-            body.put("expiresAt", token.expiresAt().toString());
+            body.put("token", pair.access().serialized());
+            body.put("refreshToken", pair.refresh().serialized());
+            body.put("expiresAt", pair.access().expiresAt().toString());
             return ResponseEntity.ok(body);
         } catch (CredentialException e) {
             return error(HttpStatus.UNAUTHORIZED, e.reason());
@@ -98,9 +98,10 @@ public class AuthController {
         body.put("userId", s.userId());
         body.put("tenantId", s.tenantId());
         if (tokenEntry) {
-            AuthToken token = tokenService.issue(s.userId(), s.tenantId());
-            body.put("token", token.serialized());
-            body.put("expiresAt", token.expiresAt().toString());
+            TokenService.TokenPair pair = tokenService.issuePair(s.userId(), s.tenantId());
+            body.put("token", pair.access().serialized());
+            body.put("refreshToken", pair.refresh().serialized());
+            body.put("expiresAt", pair.access().expiresAt().toString());
         } else {
             body.put("sessionId", sessionService.createSession(s.userId(), s.tenantId()));
         }

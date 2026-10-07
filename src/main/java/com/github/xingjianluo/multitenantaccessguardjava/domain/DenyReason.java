@@ -10,6 +10,8 @@ public enum DenyReason {
     CREDENTIAL_TAMPERED,
     /** 凭据被重放。 */
     CREDENTIAL_REPLAYED,
+    /** 凭据类型与入口不匹配（访问凭据用于续期，或续期凭据用于访问）。 */
+    CREDENTIAL_TYPE_MISMATCH,
     /** 资源不存在。 */
     RESOURCE_NOT_FOUND,
     /** 跨租户访问。 */

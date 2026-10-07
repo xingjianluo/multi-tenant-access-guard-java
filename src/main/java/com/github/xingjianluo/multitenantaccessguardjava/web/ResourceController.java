@@ -5,8 +5,8 @@ import com.github.xingjianluo.multitenantaccessguardjava.domain.Action;
 import com.github.xingjianluo.multitenantaccessguardjava.domain.AuthContext;
 import com.github.xingjianluo.multitenantaccessguardjava.domain.DenyReason;
 import com.github.xingjianluo.multitenantaccessguardjava.policy.AccessEvaluator;
-import com.github.xingjianluo.multitenantaccessguardjava.ratelimit.RateLimitResult;
-import com.github.xingjianluo.multitenantaccessguardjava.ratelimit.RateLimiter;
+import com.github.xingjianluo.multitenantaccessguardjava.ratelimit.SensitiveOperationGuard;
+import com.github.xingjianluo.multitenantaccessguardjava.ratelimit.SensitiveOperationGuard.GuardResult;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -20,17 +20,17 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-/** 受保护资源端点：读 / 写 / 删；写删为敏感操作，受限流与锁定约束。 */
+/** 受保护资源端点：读 / 写 / 删；写删为敏感操作，受限流与失败锁定约束。 */
 @RestController
 @RequestMapping("/api/resources")
 public class ResourceController {
 
     private final AccessEvaluator evaluator;
-    private final RateLimiter rateLimiter;
+    private final SensitiveOperationGuard sensitiveGuard;
 
-    public ResourceController(AccessEvaluator evaluator, RateLimiter rateLimiter) {
+    public ResourceController(AccessEvaluator evaluator, SensitiveOperationGuard sensitiveGuard) {
         this.evaluator = evaluator;
-        this.rateLimiter = rateLimiter;
+        this.sensitiveGuard = sensitiveGuard;
     }
 
     @GetMapping("/{id}")
@@ -54,20 +54,34 @@ public class ResourceController {
         if (context == null) {
             return error(HttpStatus.UNAUTHORIZED, DenyReason.UNAUTHENTICATED, action);
         }
-        if (action != Action.READ) {
-            RateLimitResult limit = rateLimiter.check("sensitive:" + context.subject().userId());
-            if (limit.locked()) {
+        boolean sensitive = action != Action.READ;
+        if (sensitive) {
+            GuardResult pre = sensitiveGuard.check(
+                    context.subject().tenantId(), context.subject().userId(), action);
+            if (pre.locked()) {
                 return error(HttpStatus.TOO_MANY_REQUESTS, DenyReason.LOCKED, action);
             }
-            if (!limit.permitted()) {
+            if (!pre.permitted()) {
                 return error(HttpStatus.TOO_MANY_REQUESTS, DenyReason.RATE_LIMITED, action);
             }
         }
         AccessDecision decision = evaluator.evaluate(context, resourceId, action);
         if (!decision.allowed()) {
+            if (sensitive) {
+                // 敏感操作失败计入连续失败，达到阈值进入锁定（与限流可区分）
+                GuardResult post = sensitiveGuard.recordFailure(
+                        context.subject().tenantId(), context.subject().userId(), action);
+                if (post.locked()) {
+                    return error(HttpStatus.TOO_MANY_REQUESTS, DenyReason.LOCKED, action);
+                }
+            }
             HttpStatus status = decision.denyReason() == DenyReason.RESOURCE_NOT_FOUND
                     ? HttpStatus.NOT_FOUND : HttpStatus.FORBIDDEN;
             return error(status, decision.denyReason(), action);
+        }
+        if (sensitive) {
+            sensitiveGuard.recordSuccess(
+                    context.subject().tenantId(), context.subject().userId(), action);
         }
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("result", "OK");

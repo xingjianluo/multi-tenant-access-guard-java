@@ -15,7 +15,7 @@ import java.time.Instant;
 /**
  * 基于角色与资源归属的统一判定器，两种登录入口共用，保证结论一致。
  * 判定顺序固定，拒绝原因可区分：
- * 资源不存在 → 跨租户 → 角色权限不足 → 非归属者。
+ * 资源在本租户下不存在（含他租户同名资源，不泄露存在性）→ 角色权限不足 → 非归属者。
  * 单次判定复用同一快照，结果可解释并写入审计。
  */
 @Component
@@ -48,15 +48,14 @@ public class AccessEvaluator {
 
     private AccessDecision doEvaluate(PolicySnapshot snapshot, AuthContext context,
                                       String resourceId, Action action) {
-        GuardedResource resource = snapshot.findResource(resourceId).orElse(null);
+        // 只按主体租户查找：他租户的同名资源与不存在返回同一结论，
+        // 调用方无法通过探测判断其他租户是否持有该编号。
+        GuardedResource resource = snapshot
+                .findResource(context.subject().tenantId(), resourceId).orElse(null);
         if (resource == null) {
             return AccessDecision.deny(DenyReason.RESOURCE_NOT_FOUND,
-                    "resource " + resourceId + " not found");
-        }
-        if (!resource.tenantId().equals(context.subject().tenantId())) {
-            return AccessDecision.deny(DenyReason.CROSS_TENANT,
-                    "resource belongs to tenant " + resource.tenantId()
-                            + ", subject tenant is " + context.subject().tenantId());
+                    "resource " + resourceId + " not found in tenant "
+                            + context.subject().tenantId());
         }
         boolean roleAllowed = context.subject().roles().stream()
                 .anyMatch(role -> snapshot.roleAllows(role, action));

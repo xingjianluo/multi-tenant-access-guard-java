@@ -23,5 +23,6 @@ public interface PolicyStore {
 
     void registerResource(GuardedResource resource);
 
-    void removeResource(String resourceId);
+    /** 移除指定租户下的资源；不同租户的同名资源互不影响。 */
+    void removeResource(String tenantId, String resourceId);
 }

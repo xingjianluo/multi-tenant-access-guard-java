@@ -75,17 +75,21 @@ public class InMemoryPolicyStore implements PolicyStore {
     @Override
     public void registerResource(GuardedResource resource) {
         current.updateAndGet(snapshot -> {
-            Map<String, GuardedResource> resources = new HashMap<>(snapshot.resources());
-            resources.put(resource.resourceId(), resource);
+            Map<PolicySnapshot.ResourceKey, GuardedResource> resources =
+                    new HashMap<>(snapshot.resources());
+            // 复合键登记：不同租户的同名资源各自独立，批量写入互不顶替。
+            resources.put(new PolicySnapshot.ResourceKey(resource.tenantId(), resource.resourceId()),
+                    resource);
             return new PolicySnapshot(snapshot.version() + 1, snapshot.rolePermissions(), resources);
         });
     }
 
     @Override
-    public void removeResource(String resourceId) {
+    public void removeResource(String tenantId, String resourceId) {
         current.updateAndGet(snapshot -> {
-            Map<String, GuardedResource> resources = new HashMap<>(snapshot.resources());
-            resources.remove(resourceId);
+            Map<PolicySnapshot.ResourceKey, GuardedResource> resources =
+                    new HashMap<>(snapshot.resources());
+            resources.remove(new PolicySnapshot.ResourceKey(tenantId, resourceId));
             return new PolicySnapshot(snapshot.version() + 1, snapshot.rolePermissions(), resources);
         });
     }

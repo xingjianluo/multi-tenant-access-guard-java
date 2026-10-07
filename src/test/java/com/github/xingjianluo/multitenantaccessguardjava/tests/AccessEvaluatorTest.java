@@ -57,11 +57,12 @@ class AccessEvaluatorTest {
     }
 
     @Test
-    void crossTenantIsDenied() {
+    void crossTenantIsDeniedWithoutExistenceLeak() {
         AccessDecision d = evaluator.evaluate(ctx("u-bob", "tenant-b", Role.USER), "doc-1", Action.READ);
         print(d, "u-bob", "tenant-b", "doc-1", Action.READ);
         assertFalse(d.allowed());
-        assertEquals(DenyReason.CROSS_TENANT, d.denyReason());
+        // 跨租户探测与资源不存在返回同一结论，不泄露对方是否持有该编号
+        assertEquals(DenyReason.RESOURCE_NOT_FOUND, d.denyReason());
     }
 
     @Test
@@ -119,7 +120,7 @@ class AccessEvaluatorTest {
         assertEquals("tenant-b", event.tenant());
         assertEquals("doc-1", event.resource());
         assertEquals(Action.READ, event.action());
-        assertEquals(DenyReason.CROSS_TENANT, event.denyReason());
+        assertEquals(DenyReason.RESOURCE_NOT_FOUND, event.denyReason());
         assertTrue(event.basis().contains("policyVersion="));
     }
 }

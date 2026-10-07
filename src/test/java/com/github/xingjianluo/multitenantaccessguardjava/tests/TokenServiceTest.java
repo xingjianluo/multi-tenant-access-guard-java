@@ -39,7 +39,7 @@ class TokenServiceTest {
         clock = new MutableClock(Instant.parse("2026-09-26T00:00:00Z"));
         directory = new UserDirectory();
         directory.register("alice", "pw", new Subject("u-alice", "tenant-a", Set.of(Role.USER)));
-        tokens = new TokenService(directory, clock, 60, "test-secret");
+        tokens = new TokenService(directory, clock, 60, 600, "test-secret");
     }
 
     @Test
@@ -78,24 +78,26 @@ class TokenServiceTest {
 
     @Test
     void oldTokenAfterRefreshIsReplay() {
-        AuthToken old = tokens.issue("u-alice", "tenant-a");
-        AuthToken rotated = tokens.refresh(old.serialized());
-        assertNotEquals(old.tokenId(), rotated.tokenId());
-        // 旧令牌再用于认证 → 重放
-        CredentialException e = assertThrows(CredentialException.class,
-                () -> tokens.authenticate(old.serialized()));
-        assertEquals(DenyReason.CREDENTIAL_REPLAYED, e.reason());
-        // 旧令牌再次续期 → 重放
+        TokenService.TokenPair pair = tokens.issuePair("u-alice", "tenant-a");
+        AuthToken oldRefresh = pair.refresh();
+        TokenService.TokenPair rotated = tokens.refresh(oldRefresh.serialized());
+        assertNotEquals(oldRefresh.tokenId(), rotated.refresh().tokenId());
+        // 重放发生前，新访问凭据正常可用
+        assertEquals("u-alice",
+                tokens.authenticate(rotated.access().serialized()).subject().userId());
+        // 旧续期凭据再次续期 → 重放，并触发整链作废
         assertEquals(DenyReason.CREDENTIAL_REPLAYED,
                 assertThrows(CredentialException.class,
-                        () -> tokens.refresh(old.serialized())).reason());
-        // 新令牌正常可用
-        assertEquals("u-alice", tokens.authenticate(rotated.serialized()).subject().userId());
+                        () -> tokens.refresh(oldRefresh.serialized())).reason());
+        // 链已作废：链上新签发的访问凭据一并失效
+        assertEquals(DenyReason.CREDENTIAL_REPLAYED,
+                assertThrows(CredentialException.class,
+                        () -> tokens.authenticate(rotated.access().serialized())).reason());
     }
 
     @Test
     void concurrentRefreshOnlyOneSucceeds() throws Exception {
-        AuthToken token = tokens.issue("u-alice", "tenant-a");
+        AuthToken refreshToken = tokens.issuePair("u-alice", "tenant-a").refresh();
         int threads = 16;
         ExecutorService pool = Executors.newFixedThreadPool(threads);
         CountDownLatch ready = new CountDownLatch(threads);
@@ -107,7 +109,7 @@ class TokenServiceTest {
                 ready.countDown();
                 try {
                     go.await();
-                    tokens.refresh(token.serialized());
+                    tokens.refresh(refreshToken.serialized());
                     success.incrementAndGet();
                 } catch (CredentialException e) {
                     if (e.reason() == DenyReason.CREDENTIAL_REPLAYED) {
